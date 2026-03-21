@@ -144,13 +144,13 @@ class PolarParser:
 
         # Dateien nach Typ vorsortieren (nur Dateinamen, kein Inhalt)
         self._activity_dateien = [n for n in self._alle_namen
-                                   if re.match(r'.*activity_.*\.json$', n)]
+                                   if re.match(r'.*activity-.*.json$', n)]
         self._training_dateien = [n for n in self._alle_namen
-                                   if re.match(r'.*training_.*\.json$', n)]
+                                   if re.match(r'.*training-.*.json$', n)]
         self._hr_dateien       = [n for n in self._alle_namen
-                                   if re.match(r'.*247ohr_.*\.json$', n)]
+                                   if re.match(r'.*247ohr-.*.json$', n)]
         self._ppi_dateien      = [n for n in self._alle_namen
-                                   if re.match(r'.*ppi_.*\.json$', n)]
+                                   if re.match(r'.*ppi-.*.json$', n)]
 
         print(f"📦 ZIP geladen: {zip_pfad}")
         print(f"   Dateien gesamt : {len(self._alle_namen):>6}")

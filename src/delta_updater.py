@@ -529,7 +529,7 @@ class DeltaUpdater:
                 )
 
         # ZIP archivieren
-        archiv_pfad = Path('archive') / zip_pfad.name
+        archiv_pfad = Path('/workspaces/polar_databricks/archive') / zip_pfad.name
         archiv_pfad.parent.mkdir(exist_ok=True)
         shutil.move(str(zip_pfad), str(archiv_pfad))
         print(f"\n📁 ZIP archiviert: {archiv_pfad}")
@@ -581,13 +581,13 @@ def _datei_kategorie(dateiname: str) -> str:
         'heartrate'
     """
     name = dateiname.lower()
-    if 'activity_' in name:
+    if 'activity-' in name or 'activity_' in name:
         return 'activity'
-    if 'training_' in name:
+    if 'training-' in name or 'training_' in name:
         return 'training'
-    if '247ohr_' in name:
+    if '247ohr-' in name or '247ohr_' in name:
         return 'heartrate'
-    if 'ppi_' in name:
+    if 'ppi-' in name or 'ppi_' in name:
         return 'hrv'
     if 'fitness_' in name:
         return 'fitness'

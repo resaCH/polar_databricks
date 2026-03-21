@@ -341,7 +341,7 @@ class DeltaUpdater:
             if isinstance(val, bool):
                 return 'TRUE' if val else 'FALSE'
             # Datum und String: in Hochkommas
-            return f"'{str(val)}'"
+            return f"'{str(val).replace("'", "''")}'"
 
         zeilen_sql = []
         for _, row in df.iterrows():

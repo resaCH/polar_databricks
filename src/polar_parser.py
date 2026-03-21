@@ -117,6 +117,13 @@ def _safe_int(value, default: int = None) -> int:
 # Hauptklasse
 # ============================================================
 
+
+def _sport_lesen(sport_wert) -> str:
+    """Liest den Sportnamen – unterstützt String und Dict-Format."""
+    if isinstance(sport_wert, dict):
+        return 'UNBEKANNT'
+    return str(sport_wert).upper().replace("'", "")
+
 class PolarParser:
     """
     Liest und parst einen Polar-Datenexport (ZIP-Datei) im Arbeitsspeicher.
@@ -148,9 +155,9 @@ class PolarParser:
         self._training_dateien = [n for n in self._alle_namen
                                    if re.match(r'.*training-.*.json$', n)]
         self._hr_dateien       = [n for n in self._alle_namen
-                                   if re.match(r'.*247ohr-.*.json$', n)]
+                                   if re.match(r'.*247ohr_.*.json$', n)]
         self._ppi_dateien      = [n for n in self._alle_namen
-                                   if re.match(r'.*ppi-.*.json$', n)]
+                                   if re.match(r'.*ppi_.*.json$', n)]
 
         print(f"📦 ZIP geladen: {zip_pfad}")
         print(f"   Dateien gesamt : {len(self._alle_namen):>6}")
@@ -314,7 +321,7 @@ class PolarParser:
 
                     zeilen.append({
                         'datum'     : datum,
-                        'sport'     : str(ex.get('sport', 'UNKNOWN')).upper(),
+                        'sport'     : _sport_lesen(ex.get('sport', 'UNKNOWN')),
                         'dauer_min' : _parse_iso_duration(ex.get('duration', '')),
                         'hr_avg'    : _safe_float(hr_info.get('average')),
                         'hr_max'    : _safe_float(hr_info.get('maximum')),

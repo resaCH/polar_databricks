@@ -122,37 +122,56 @@ def _safe_int(value, default: int = None) -> int:
 
 # Polar Sport-ID → Sportartname
 POLAR_SPORT_IDS = {
+    # ── Laufen ──────────────────────────────────────────────
     '1'  : 'RUNNING',
+    '27' : 'TRAIL_RUNNING',
+    # ── Velo / Cycling ──────────────────────────────────────
     '2'  : 'CYCLING',
     '3'  : 'MOUNTAIN_BIKING',
+    '38' : 'INDOOR_CYCLING',
+    '113': 'E_BIKE',
+    # ── Wandern / Walking ───────────────────────────────────
     '4'  : 'HIKING',
-    '5'  : 'TREKKING',
+    '5'  : 'HIKING',
+    '17' : 'WALKING',
+    '94' : 'WALKING',
+    # ── Wintersport ─────────────────────────────────────────
     '6'  : 'DOWNHILL_SKIING',
     '7'  : 'CROSS_COUNTRY_SKIING',
-    '8'  : 'SNOWBOARDING',
+    '8'  : 'INDOOR_ROWING',       # war Snowboarding → Rudern
+    '58' : 'BOOTCAMP',            # war Ski_Touring → Bootcamp
+    # ── Schwimmen ───────────────────────────────────────────
     '11' : 'SWIMMING',
-    '15' : 'FITNESS_TRAINING',
-    '16' : 'YOGA',
-    '17' : 'WALKING',
-    '18' : 'FOOTBALL',
-    '23' : 'BADMINTON',
-    '24' : 'ROWING_MACHINE',
-    '27' : 'TRAIL_RUNNING',
-    '36' : 'TENNIS',
-    '38' : 'INDOOR_CYCLING',
-    '51' : 'FRISBEE',
-    '55' : 'VOLLEYBALL',
-    '58' : 'SKI_TOURING',
+    '23' : 'SWIMMING',            # war Badminton → Schwimmen
     '83' : 'OPEN_WATER_SWIMMING',
-    '92' : 'MOUNTAINEERING',
-    '94' : 'NORDIC_WALKING',
-    '103': 'PADEL',
-    '105': 'STAND_UP_PADDLING',
-    '111': 'PILATES',
-    '117': 'GYM',
-    '126': 'STRETCHING',
-    '127': 'MEDITATION',
-    '177': 'BEACH_VOLLEYBALL',
+    '103': 'SWIMMING',            # war Padel → Bahnschwimmen
+    '105': 'OPEN_WATER_SWIMMING', # war SUP → Freiwasser
+    # ── Kraft / Gym ─────────────────────────────────────────
+    '15' : 'FITNESS_TRAINING',
+    '117': 'INDOOR_ROWING',       # war Gym → Indoor-Rudern
+    '24' : 'CROSS_COUNTRY_SKIING',# war Rowing Machine → Langlauf
+    # ── Mobilität / Yoga ────────────────────────────────────
+    '16' : 'OUTDOOR_OTHER',       # war Yoga → Sonstige Outdoor
+    '111': 'MOBILITY_DYNAMIC',    # war Pilates → Mobilität dyn.
+    '126': 'CORE',                # war Stretching → Core
+    '127': 'MOBILITY_STATIC',     # war Meditation → Mobilität stat.
+    # ── Teamsport ───────────────────────────────────────────
+    '18' : 'INDOOR_CYCLING',      # war Football → Indoor Cycling
+    '51' : 'UNIHOCKEY',           # war Frisbee → Unihockey
+    '55' : 'VOLLEYBALL',
+    '177': 'E_BIKE',              # war Beach Volleyball → E-Bike
+    # ── Diverse ─────────────────────────────────────────────
+    '36' : 'RUNNING',             # war Tennis → Leichtathletik → Running
+    '61' : 'AEROBIC',             # war unbekannt → Aerobic
+    '92' : 'TRAIL_RUNNING',       # war Mountaineering → Trail Running
+    '36' : 'RUNNING',
+}
+
+# Nachkorrektur: Sportarten die anhand von Pace umkategorisiert werden
+# HIKING/WALKING mit Pace < 10 min/km → RUNNING (Joggen auf falschem Modus aufgezeichnet)
+SPORT_PACE_KORREKTUREN = {
+    'HIKING' : ('RUNNING', 10.0),   # pace < 10 min/km → RUNNING
+    'WALKING': ('RUNNING', 10.0),   # pace < 10 min/km → RUNNING
 }
 
 def _sport_lesen(sport_wert) -> str:

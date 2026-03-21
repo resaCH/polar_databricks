@@ -118,11 +118,51 @@ def _safe_int(value, default: int = None) -> int:
 # ============================================================
 
 
+
+
+# Polar Sport-ID → Sportartname
+POLAR_SPORT_IDS = {
+    '1'  : 'RUNNING',
+    '2'  : 'CYCLING',
+    '3'  : 'MOUNTAIN_BIKING',
+    '4'  : 'HIKING',
+    '5'  : 'TREKKING',
+    '6'  : 'DOWNHILL_SKIING',
+    '7'  : 'CROSS_COUNTRY_SKIING',
+    '8'  : 'SNOWBOARDING',
+    '11' : 'SWIMMING',
+    '15' : 'FITNESS_TRAINING',
+    '16' : 'YOGA',
+    '17' : 'WALKING',
+    '18' : 'FOOTBALL',
+    '23' : 'BADMINTON',
+    '24' : 'ROWING_MACHINE',
+    '27' : 'TRAIL_RUNNING',
+    '36' : 'TENNIS',
+    '38' : 'INDOOR_CYCLING',
+    '51' : 'FRISBEE',
+    '55' : 'VOLLEYBALL',
+    '58' : 'SKI_TOURING',
+    '83' : 'OPEN_WATER_SWIMMING',
+    '92' : 'MOUNTAINEERING',
+    '94' : 'NORDIC_WALKING',
+    '103': 'PADEL',
+    '105': 'STAND_UP_PADDLING',
+    '111': 'PILATES',
+    '117': 'GYM',
+    '126': 'STRETCHING',
+    '127': 'MEDITATION',
+    '177': 'BEACH_VOLLEYBALL',
+}
+
 def _sport_lesen(sport_wert) -> str:
-    """Liest den Sportnamen – unterstützt String und Dict-Format."""
+    """Liest den Sportnamen – unterstützt String und Dict-Format mit ID-Mapping."""
     if isinstance(sport_wert, dict):
-        return 'UNBEKANNT'
-    return str(sport_wert).upper().replace("'", "")
+        sid = str(sport_wert.get('id', sport_wert.get('ID', '')))
+        return POLAR_SPORT_IDS.get(sid, f'ID_{sid}')
+    val = str(sport_wert).strip().replace("'", "")
+    return val if val else 'UNKNOWN'
+
 
 class PolarParser:
     """
@@ -310,23 +350,49 @@ class PolarParser:
                 wochentag = start_dt.strftime('%A')  # Englisch: Monday..Sunday
                 jahr    = start_dt.year
 
+                # Sport auf Training-Ebene lesen
+                sport_training = daten.get('sport', 'UNKNOWN')
+
+                # Dauer/Distanz/HR: Training-Ebene als Fallback
+                dauer_ms_top   = _safe_float(daten.get('durationMillis', 0)) or 0
+                distanz_m_top  = _safe_float(daten.get('distanceMeters', 0)) or 0
+                kalorien_top   = _safe_float(daten.get('calories'))
+                hr_avg_top     = _safe_float(daten.get('hrAvg'))
+                hr_max_top     = _safe_float(daten.get('hrMax'))
+
                 exercises = daten.get('exercises', [])
-                if not exercises:
-                    # Trainingseinheit ohne Exercises → übergeordnete Felder nutzen
-                    exercises = [daten]
 
-                for ex in exercises:
-                    hr_info  = ex.get('heartRate', {}) or {}
-                    distanz_m = _safe_float(ex.get('distance', 0)) or 0.0
+                if exercises:
+                    for ex in exercises:
+                        hr_info   = ex.get('heartRate', {}) or {}
+                        distanz_m = _safe_float(ex.get('distanceMeters',
+                                        ex.get('distance', 0))) or distanz_m_top
+                        dauer_ms  = _safe_float(ex.get('durationMillis',
+                                        0)) or dauer_ms_top
+                        sport_ex  = ex.get('sport', sport_training)
 
+                        zeilen.append({
+                            'datum'     : datum,
+                            'sport'     : _sport_lesen(sport_ex),
+                            'dauer_min' : round(dauer_ms / 60000, 2) if dauer_ms else
+                                          _parse_iso_duration(ex.get('duration', '')),
+                            'hr_avg'    : _safe_float(hr_info.get('average')) or hr_avg_top,
+                            'hr_max'    : _safe_float(hr_info.get('maximum')) or hr_max_top,
+                            'distanz_km': round(distanz_m / 1000, 3) if distanz_m else None,
+                            'kalorien'  : _safe_float(ex.get('calories')) or kalorien_top,
+                            'wochentag' : wochentag,
+                            'jahr'      : jahr,
+                        })
+                else:
+                    # Kein Exercise → direkt Training-Ebene verwenden
                     zeilen.append({
                         'datum'     : datum,
-                        'sport'     : _sport_lesen(ex.get('sport', 'UNKNOWN')),
-                        'dauer_min' : _parse_iso_duration(ex.get('duration', '')),
-                        'hr_avg'    : _safe_float(hr_info.get('average')),
-                        'hr_max'    : _safe_float(hr_info.get('maximum')),
-                        'distanz_km': round(distanz_m / 1000, 3) if distanz_m else None,
-                        'kalorien'  : _safe_float(ex.get('calories')),
+                        'sport'     : _sport_lesen(sport_training),
+                        'dauer_min' : round(dauer_ms_top / 60000, 2) if dauer_ms_top else None,
+                        'hr_avg'    : hr_avg_top,
+                        'hr_max'    : hr_max_top,
+                        'distanz_km': round(distanz_m_top / 1000, 3) if distanz_m_top else None,
+                        'kalorien'  : kalorien_top,
                         'wochentag' : wochentag,
                         'jahr'      : jahr,
                     })

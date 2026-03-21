@@ -1,0 +1,26 @@
+# ============================================================
+# Polar Health Analytics – requirements.txt
+# Python 3.12 | Stand: März 2026
+# ============================================================
+
+# --- Datenverarbeitung ---
+pandas==2.2.3
+numpy==2.1.3
+
+# --- Visualisierung ---
+matplotlib==3.9.4
+seaborn==0.13.2
+plotly==5.24.1
+
+# --- Databricks-Verbindung ---
+databricks-sql-connector==3.4.0
+
+# --- Jupyter ---
+jupyter==1.1.1
+jupyterlab==4.3.4
+ipywidgets==8.1.5
+nbformat==5.10.4
+
+# --- Hilfspakete ---
+python-dotenv==1.0.1
+tqdm==4.67.1

@@ -369,8 +369,9 @@ class PolarParser:
                 wochentag = start_dt.strftime('%A')  # Englisch: Monday..Sunday
                 jahr    = start_dt.year
 
-                # Sport auf Training-Ebene lesen
-                sport_training = daten.get('sport', 'UNKNOWN')
+                # Sport + Name auf Training-Ebene lesen
+                sport_training  = daten.get('sport', 'UNKNOWN')
+                training_name   = (daten.get('name') or '').strip().lower()
 
                 # Dauer/Distanz/HR: Training-Ebene als Fallback
                 dauer_ms_top   = _safe_float(daten.get('durationMillis', 0)) or 0
@@ -404,9 +405,21 @@ class PolarParser:
                         })
                 else:
                     # Kein Exercise → direkt Training-Ebene verwenden
+                    sport_name_top = _sport_lesen(sport_training)
+                    if 'laufband' in training_name or 'laufb.' in training_name or 'treadmill' in training_name:
+                        kat_top = 'TREADMILL'
+                    elif sport_name_top == 'TRAIL_RUNNING':
+                        sport_name_top = 'RUNNING'
+                        kat_top = 'TRAIL'
+                    elif sport_name_top == 'RUNNING':
+                        kat_top = 'OUTDOOR'
+                    else:
+                        kat_top = None
+
                     zeilen.append({
                         'datum'     : datum,
-                        'sport'     : _sport_lesen(sport_training),
+                        'sport'     : sport_name_top,
+                        'kategorie' : kat_top,
                         'dauer_min' : round(dauer_ms_top / 60000, 2) if dauer_ms_top else None,
                         'hr_avg'    : hr_avg_top,
                         'hr_max'    : hr_max_top,

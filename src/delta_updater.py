@@ -118,6 +118,7 @@ USING (
     SELECT
         CAST(datum AS DATE)         AS datum,
         CAST(sport AS STRING)       AS sport,
+        CAST(kategorie AS STRING)   AS kategorie,
         CAST(dauer_min AS DOUBLE)   AS dauer_min,
         CAST(hr_avg AS DOUBLE)      AS hr_avg,
         CAST(hr_max AS DOUBLE)      AS hr_max,
@@ -519,6 +520,22 @@ class DeltaUpdater:
                 self._merge_dataframe(
                     df_hrv, 'hrv', _MERGE_HRV, 'src_hrv'
                 )
+
+            # Sport-Korrekturen nach Import
+            print("\n▶ Sport-Korrekturen...")
+            self._cursor.execute(f"""
+                UPDATE {self.catalog}.{self.schema}.training
+                SET sport = 'RUNNING', kategorie = 'OUTDOOR'
+                WHERE sport IN ('HIKING', 'WALKING')
+                  AND distanz_km > 0 AND dauer_min > 0
+                  AND (dauer_min / distanz_km) < 10
+            """)
+            self._cursor.execute(f"""
+                UPDATE {self.catalog}.{self.schema}.training
+                SET sport = 'RUNNING', kategorie = 'TRAIL'
+                WHERE sport = 'TRAIL_RUNNING'
+            """)
+            print("   ✅ Sport-Korrekturen angewendet")
 
             # Import-Log aktualisieren
             print("\n▶ Import-Log aktualisieren...")

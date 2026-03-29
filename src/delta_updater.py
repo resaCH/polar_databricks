@@ -169,6 +169,89 @@ WHEN MATCHED AND ziel.hrv_rmssd <> quelle.hrv_rmssd
 WHEN NOT MATCHED THEN INSERT *
 """
 
+_MERGE_FITNESS_TEST = """
+MERGE INTO {catalog}.{schema}.fitness_tests AS ziel
+USING (
+    SELECT
+        CAST(datum AS DATE)             AS datum,
+        CAST(own_index AS DOUBLE)       AS own_index,
+        CAST(avg_hr AS DOUBLE)          AS avg_hr,
+        CAST(fitness_class AS STRING)   AS fitness_class,
+        CAST(timezone_offset AS INT)    AS timezone_offset,
+        CAST(birthday AS DATE)          AS birthday,
+        CAST(sex AS STRING)             AS sex,
+        CAST(height AS DOUBLE)          AS height,
+        CAST(weight AS DOUBLE)          AS weight,
+        CAST(max_hr AS INT)             AS max_hr,
+        CAST(resting_hr AS INT)         AS resting_hr,
+        CAST(aerobic_threshold AS INT)  AS aerobic_threshold,
+        CAST(anaerobic_threshold AS INT)AS anaerobic_threshold,
+        CAST(vo2max AS DOUBLE)          AS vo2max,
+        CAST(training_background AS STRING) AS training_background,
+        CAST(weight_source AS STRING)   AS weight_source,
+        CAST(sleep_goal AS BIGINT)      AS sleep_goal
+    FROM {temp_view}
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY datum ORDER BY own_index DESC) = 1
+) AS quelle
+ON ziel.datum = quelle.datum
+WHEN MATCHED THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *
+"""
+
+_MERGE_ORTHOSTATIC_TEST = """
+MERGE INTO {catalog}.{schema}.orthostatic_tests AS ziel
+USING (
+    SELECT
+        CAST(datum AS DATE)             AS datum,
+        CAST(json_data AS STRING)       AS json_data
+    FROM {temp_view}
+) AS quelle
+ON ziel.datum = quelle.datum
+WHEN MATCHED THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *
+"""
+
+_MERGE_PHYSICAL_INFO = """
+MERGE INTO {catalog}.{schema}.physical_info AS ziel
+USING (
+    SELECT
+        CAST(datum AS DATE)             AS datum,
+        CAST(json_data AS STRING)       AS json_data
+    FROM {temp_view}
+) AS quelle
+ON ziel.datum = quelle.datum
+WHEN MATCHED THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *
+"""
+
+_MERGE_PRODUCTS_DEVICES = """
+MERGE INTO {catalog}.{schema}.products_devices AS ziel
+USING (
+    SELECT
+        CAST(datum AS DATE)             AS datum,
+        CAST(json_data AS STRING)       AS json_data
+    FROM {temp_view}
+) AS quelle
+ON ziel.datum = quelle.datum
+WHEN MATCHED THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *
+"""
+
+_MERGE_SONSTIGE = """
+MERGE INTO {catalog}.{schema}.sonstige_daten AS ziel
+USING (
+    SELECT
+        CAST(dateiname AS STRING)       AS dateiname,
+        CAST(kategorie AS STRING)       AS kategorie,
+        CAST(datum AS DATE)             AS datum,
+        CAST(json_data AS STRING)       AS json_data
+    FROM {temp_view}
+) AS quelle
+ON ziel.dateiname = quelle.dateiname
+WHEN MATCHED THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *
+"""
+
 _MERGE_IMPORT_LOG = """
 MERGE INTO {catalog}.{schema}.import_log AS ziel
 USING (
@@ -521,6 +604,30 @@ class DeltaUpdater:
                     df_hrv, 'hrv', _MERGE_HRV, 'src_hrv'
                 )
 
+            # Fitness-Tests
+            print("\n▶ Fitness-Test-Daten...")
+            df_fitness = parser.parse_fitness_tests()
+            if not df_fitness.empty:
+                self._merge_dataframe(
+                    df_fitness, 'fitness_tests', _MERGE_FITNESS_TEST, 'src_fitness'
+                )
+
+            # Sonstige Daten (generisch)
+            sonstige_kategorien = [
+                'orthostatic_test', 'physical_info', 'products_devices',
+                'generic_exercise', 'planned_exercise', 'programs', 'season',
+                'jump_test', 'account', 'sleep', 'nightly_recovery',
+                'favourite', 'calendar', 'sport', 'sonstige'
+            ]
+
+            for kat in sonstige_kategorien:
+                df_sonstige = parser.parse_sonstige(kat)
+                if not df_sonstige.empty:
+                    print(f"\n▶ {kat.replace('_', ' ').title()}-Daten...")
+                    self._merge_dataframe(
+                        df_sonstige, 'sonstige_daten', _MERGE_SONSTIGE, f'src_{kat}'
+                    )
+
             # Sport-Korrekturen nach Import
             print("\n▶ Sport-Korrekturen...")
             self._cursor.execute(f"""
@@ -588,26 +695,53 @@ def _datei_kategorie(dateiname: str) -> str:
         dateiname: Dateiname (z.B. 'activity_2024-01-15.json')
 
     Returns:
-        Kategorie-String: 'activity', 'training', 'heartrate',
-        'hrv', 'fitness', 'physical' oder 'sonstige'.
+        Kategorie-String: 'activity', 'training', 'heartrate', 'hrv',
+        'fitness_test', 'orthostatic_test', 'physical_info', 'products_devices',
+        oder 'sonstige'.
 
     Beispiel:
         >>> _datei_kategorie('activity_2024-01-15.json')
         'activity'
-        >>> _datei_kategorie('247ohr_2024-01.json')
-        'heartrate'
+        >>> _datei_kategorie('fitness-test-results_2024-01-15.json')
+        'fitness_test'
     """
     name = dateiname.lower()
     if 'activity-' in name or 'activity_' in name:
         return 'activity'
-    if 'training-' in name or 'training_' in name:
+    if 'training-session' in name or 'training-' in name or 'training_' in name:
         return 'training'
     if '247ohr-' in name or '247ohr_' in name:
         return 'heartrate'
     if 'ppi-' in name or 'ppi_' in name:
         return 'hrv'
-    if 'fitness_' in name:
-        return 'fitness'
-    if 'physical_' in name:
-        return 'physical'
+    if 'fitness-test-results' in name:
+        return 'fitness_test'
+    if 'orthostatic-test-result' in name:
+        return 'orthostatic_test'
+    if 'physical-test-rr' in name or 'physical-info' in name:
+        return 'physical_info'
+    if 'products-devices' in name:
+        return 'products_devices'
+    if 'generic-exercise' in name or 'generic-period' in name:
+        return 'generic_exercise'
+    if 'planned-exercise' in name or 'planned-route' in name:
+        return 'planned_exercise'
+    if 'programs' in name or 'program-' in name:
+        return 'programs'
+    if 'season' in name:
+        return 'season'
+    if 'jump-test' in name:
+        return 'jump_test'
+    if 'account' in name:
+        return 'account'
+    if 'sleep_' in name or 'sleep-' in name:
+        return 'sleep'
+    if 'nightly_recovery' in name or 'nightly-recovery' in name:
+        return 'nightly_recovery'
+    if 'favourite' in name:
+        return 'favourite'
+    if 'calendar' in name:
+        return 'calendar'
+    if 'sport' in name:
+        return 'sport'
     return 'sonstige'

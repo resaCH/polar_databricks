@@ -6,6 +6,7 @@
 # --- Credentials & Konfiguration ---
 .env
 .databricks_config.json
+.polar_tokens.json
 
 # --- Gesundheitsdaten – ALLE Formate und Ordner ---
 input/

@@ -34,6 +34,70 @@ import pandas as pd
 
 
 # ============================================================
+# Datei-Kategorie-Bestimmung (aus delta_updater.py ausgelagert)
+# ============================================================
+
+def _datei_kategorie(dateiname: str) -> str:
+    """
+    Bestimmt die Kategorie einer Polar-Datei anhand des Namens.
+
+    Args:
+        dateiname: Dateiname (z.B. 'activity_2024-01-15.json')
+
+    Returns:
+        Kategorie-String: 'activity', 'training', 'heartrate', 'hrv',
+        'fitness_test', 'orthostatic_test', 'physical_info', 'products_devices',
+        oder 'sonstige'.
+
+    Beispiel:
+        >>> _datei_kategorie('activity_2024-01-15.json')
+        'activity'
+        >>> _datei_kategorie('fitness-test-results_2024-01-15.json')
+        'fitness_test'
+    """
+    name = dateiname.lower()
+    if 'activity-' in name or 'activity_' in name:
+        return 'activity'
+    if 'training-session' in name or 'training-' in name or 'training_' in name:
+        return 'training'
+    if '247ohr-' in name or '247ohr_' in name:
+        return 'heartrate'
+    if 'ppi-' in name or 'ppi_' in name:
+        return 'hrv'
+    if 'fitness-test-results' in name:
+        return 'fitness_test'
+    if 'orthostatic-test-result' in name:
+        return 'orthostatic_test'
+    if 'physical-test-rr' in name or 'physical-info' in name:
+        return 'physical_info'
+    if 'products-devices' in name:
+        return 'products_devices'
+    if 'generic-exercise' in name or 'generic-period' in name:
+        return 'generic_exercise'
+    if 'planned-exercise' in name or 'planned-route' in name:
+        return 'planned_exercise'
+    if 'programs' in name or 'program-' in name:
+        return 'programs'
+    if 'season' in name:
+        return 'season'
+    if 'jump-test' in name:
+        return 'jump_test'
+    if 'account' in name:
+        return 'account'
+    if 'sleep_' in name or 'sleep-' in name:
+        return 'sleep'
+    if 'nightly_recovery' in name or 'nightly-recovery' in name:
+        return 'nightly_recovery'
+    if 'favourite' in name:
+        return 'favourite'
+    if 'calendar' in name:
+        return 'calendar'
+    if 'sport' in name:
+        return 'sport'
+    return 'sonstige'
+
+
+# ============================================================
 # Hilfsfunktionen
 # ============================================================
 
@@ -172,6 +236,33 @@ POLAR_SPORT_IDS = {
 SPORT_PACE_KORREKTUREN = {
     'HIKING' : ('RUNNING', 10.0),   # pace < 10 min/km → RUNNING
     'WALKING': ('RUNNING', 10.0),   # pace < 10 min/km → RUNNING
+}
+
+# Sport → Kategorie (RUNNING wird separat per Name/Sporttyp behandelt)
+_SPORT_KATEGORIE = {
+    'OUTDOOR_OTHER':        'OUTDOOR',
+    'CYCLING':              'OUTDOOR',
+    'MOUNTAIN_BIKING':      'OUTDOOR',
+    'E_BIKE':               'OUTDOOR',
+    'HIKING':               'OUTDOOR',
+    'WALKING':              'OUTDOOR',
+    'CROSS_COUNTRY_SKIING': 'OUTDOOR',
+    'DOWNHILL_SKIING':      'OUTDOOR',
+    'OPEN_WATER_SWIMMING':  'OUTDOOR',
+    'VOLLEYBALL':           'OUTDOOR',
+    'SWIMMING':             'INDOOR',
+    'INDOOR_CYCLING':       'INDOOR',
+    'INDOOR_ROWING':        'INDOOR',
+    'STRENGTH_TRAINING':    'INDOOR',
+    'FITNESS_TRAINING':     'INDOOR',
+    'CORE':                 'INDOOR',
+    'MOBILITY_DYNAMIC':     'INDOOR',
+    'MOBILITY_STATIC':      'INDOOR',
+    'YOGA':                 'INDOOR',
+    'PILATES':              'INDOOR',
+    'AEROBIC':              'INDOOR',
+    'BOOTCAMP':             'INDOOR',
+    'UNIHOCKEY':            'INDOOR',
 }
 
 def _sport_lesen(sport_wert) -> str:
@@ -409,7 +500,7 @@ class PolarParser:
                         elif sport_name == 'RUNNING':
                             kategorie  = 'OUTDOOR'
                         else:
-                            kategorie  = None
+                            kategorie  = _SPORT_KATEGORIE.get(sport_name)
 
                         zeilen.append({
                             'datum'     : datum,
@@ -434,7 +525,7 @@ class PolarParser:
                     elif sport_name_top == 'RUNNING':
                         kat_top = 'OUTDOOR'
                     else:
-                        kat_top = None
+                        kat_top = _SPORT_KATEGORIE.get(sport_name_top)
 
                     zeilen.append({
                         'datum'     : datum,
@@ -642,6 +733,159 @@ class PolarParser:
             df = df.sort_values('datum').drop_duplicates('datum').reset_index(drop=True)
 
         print(f"✅ HRV: {len(df)} Tage geladen ({fehler} Fehler)")
+        return df
+
+    # --------------------------------------------------------
+    # fitness-test-results-*.json → polar.fitness_tests
+    # --------------------------------------------------------
+
+    def parse_fitness_tests(self, fortschritt: bool = True) -> pd.DataFrame:
+        """
+        Parst alle fitness-test-results-*.json Dateien.
+
+        Jede Datei enthält die Ergebnisse eines Polar Fitness-Tests
+        mit VO2Max, OwnIndex, Herzfrequenzdaten und physischen Informationen.
+
+        Args:
+            fortschritt: Fortschrittsanzeige (Standard: True)
+
+        Returns:
+            DataFrame mit Spalten:
+                datum (date), own_index (float), avg_hr (float),
+                fitness_class (str), timezone_offset (int),
+                birthday (date), sex (str), height (float), weight (float),
+                max_hr (int), resting_hr (int), aerobic_threshold (int),
+                anaerobic_threshold (int), vo2max (float),
+                training_background (str), weight_source (str), sleep_goal (int)
+
+        Beispiel:
+            >>> df = parser.parse_fitness_tests()
+            >>> df['vo2max'].describe()
+        """
+        zeilen = []
+        fehler = 0
+
+        # Fitness-Test-Dateien identifizieren
+        fitness_dateien = [n for n in self._alle_namen
+                          if 'fitness-test-results' in n]
+
+        for i, dateiname in enumerate(fitness_dateien):
+            if fortschritt and i % 50 == 0:
+                print(f"   Fitness-Tests: {i}/{len(fitness_dateien)}...")
+
+            daten = self._lese_json(dateiname)
+            if daten is None:
+                fehler += 1
+                continue
+
+            try:
+                # Startzeit als Datum verwenden
+                start_str = daten.get('startTime', '')
+                if not start_str:
+                    continue
+
+                try:
+                    start_dt = pd.to_datetime(start_str, utc=True).tz_convert(None)
+                except Exception:
+                    start_dt = pd.to_datetime(start_str)
+
+                datum = start_dt.date()
+
+                # Fitness-Test-Ergebnisse
+                ft_result = daten.get('fitnessTestResult', {})
+                phys_info = ft_result.get('physicalInformation', {})
+
+                zeilen.append({
+                    'datum'               : datum,
+                    'own_index'           : _safe_float(ft_result.get('ownIndex')),
+                    'avg_hr'              : _safe_float(ft_result.get('averageHeartRate')),
+                    'fitness_class'       : ft_result.get('fitnessClass', ''),
+                    'timezone_offset'     : ft_result.get('timezoneOffsetMinutes'),
+                    'birthday'            : pd.to_datetime(phys_info.get('birthday')).date() if phys_info.get('birthday') else None,
+                    'sex'                 : phys_info.get('sex', ''),
+                    'height'              : _safe_float(phys_info.get('height')),
+                    'weight'              : _safe_float(phys_info.get('weight')),
+                    'max_hr'              : phys_info.get('maximumHeartRate'),
+                    'resting_hr'          : phys_info.get('restingHeartRate'),
+                    'aerobic_threshold'   : phys_info.get('aerobicThreshold'),
+                    'anaerobic_threshold' : phys_info.get('anaerobicThreshold'),
+                    'vo2max'              : _safe_float(phys_info.get('vo2Max')),
+                    'training_background' : phys_info.get('trainingBackground', ''),
+                    'weight_source'       : phys_info.get('weightSource', ''),
+                    'sleep_goal'          : phys_info.get('sleepGoal'),
+                })
+
+            except Exception as e:
+                fehler += 1
+                print(f"   ⚠️  Parse-Fehler in '{dateiname}': {e}")
+
+        df = pd.DataFrame(zeilen)
+        if not df.empty:
+            df = df.sort_values('datum').reset_index(drop=True)
+
+        print(f"✅ Fitness-Tests: {len(df)} Tests geladen ({fehler} Fehler)")
+        return df
+
+    # --------------------------------------------------------
+    # Generische Parser für sonstige Dateitypen
+    # --------------------------------------------------------
+
+    def parse_sonstige(self, kategorie: str, fortschritt: bool = True) -> pd.DataFrame:
+        """
+        Generischer Parser für sonstige JSON-Dateitypen.
+        Speichert die kompletten JSON-Daten als String.
+
+        Args:
+            kategorie: Dateikategorie (z.B. 'orthostatic_test')
+            fortschritt: Fortschrittsanzeige (Standard: True)
+
+        Returns:
+            DataFrame mit Spalten: dateiname, kategorie, datum, json_data
+        """
+        zeilen = []
+        fehler = 0
+
+        # Dateien dieser Kategorie identifizieren
+        kat_dateien = [n for n in self._alle_namen
+                      if _datei_kategorie(n) == kategorie]
+
+        for i, dateiname in enumerate(kat_dateien):
+            if fortschritt and i % 50 == 0:
+                print(f"   {kategorie}: {i}/{len(kat_dateien)}...")
+
+            daten = self._lese_json(dateiname)
+            if daten is None:
+                fehler += 1
+                continue
+
+            try:
+                # Versuche Datum zu extrahieren
+                datum = None
+                for key in ['startTime', 'created', 'date']:
+                    if key in daten and daten[key]:
+                        try:
+                            dt = pd.to_datetime(daten[key], utc=True).tz_convert(None)
+                            datum = dt.date()
+                            break
+                        except Exception:
+                            continue
+
+                zeilen.append({
+                    'dateiname' : dateiname,
+                    'kategorie' : kategorie,
+                    'datum'     : datum,
+                    'json_data' : json.dumps(daten, ensure_ascii=False),
+                })
+
+            except Exception as e:
+                fehler += 1
+                print(f"   ⚠️  Parse-Fehler in '{dateiname}': {e}")
+
+        df = pd.DataFrame(zeilen)
+        if not df.empty:
+            df = df.sort_values('dateiname').reset_index(drop=True)
+
+        print(f"✅ {kategorie}: {len(df)} Dateien geladen ({fehler} Fehler)")
         return df
 
     # --------------------------------------------------------
